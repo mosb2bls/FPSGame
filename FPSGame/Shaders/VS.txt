@@ -1,0 +1,37 @@
+cbuffer staticMeshBuffer : register(b0)
+{
+    float4x4 W;
+    float4x4 VP;
+};
+
+struct VSIn
+{
+    float3 pos     : POSITION;
+    float3 normal  : NORMAL;
+    float3 tangent : TANGENT;
+    float2 uv      : TEXCOORD;
+};
+
+struct VSOut
+{
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+VSOut VS(VSIn i)
+{
+    VSOut o;
+    float4 wp = mul(float4(i.pos, 1.0f), W);
+    float4 clip = mul(wp, VP);
+    
+    // Sky Depth Hack
+    clip.z = clip.w; 
+    o.pos = clip;
+
+    // --- THE FIX ---
+    o.uv.x = i.uv.x;
+    o.uv.y = 1.0f - i.uv.y; // <--- FLIP: Corrects the sky orientation
+    // ---------------
+
+    return o;
+}

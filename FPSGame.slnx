@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="FPSGame/FPSGame.vcxproj" Id="2bb276a5-89ba-440f-950b-5de9e153ecca" />
+</Solution>
