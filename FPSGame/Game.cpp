@@ -1,404 +1,490 @@
-﻿
-#include "Core.h"
+﻿#include "Core.h"
 #include "Window.h"
 #include "Timer.h"
 #include "Maths.h"
 #include "Shaders.h"
 #include "Mesh.h"
 #include "PSO.h"
-#include "GEMLoader.h"
-#include "Animation.h"
-#include "modelState.h"
 #include "SkyDome.h"
 #include "HeightmapTerrain.h"
+#include "Gun.h"
+#include "HybridGrassField.h"
+#include "Rocks.h"
+#include "AssetManager.h"
+#include "Animation.h"
+#include "modelState.h"
+#include "RandomGenerator.h"  // Include the vegetation generator
 #include <algorithm>
 #include <Windows.h>
-#include "Gun.h"
-
-// Properties -> Linker -> System -> Windows
-
-#include <d3dcompiler.h>
-#pragma comment(lib, "d3dcompiler.lib")
-
-
-class Plane
-{
-public:
-	Mesh mesh;
-	std::string shaderName;
-	STATIC_VERTEX addVertex(Vec3 p, Vec3 n, float tu, float tv)
-	{
-		STATIC_VERTEX v;
-		v.pos = p;
-		v.normal = n;
-		Frame frame;
-		frame.fromVector(n);
-		v.tangent = frame.u;
-		v.tu = tu;
-		v.tv = tv;
-		return v;
-	}
-	void init(Core* core, PSOManager *psos, Shaders* shaders)
-	{
-		std::vector<STATIC_VERTEX> vertices;
-		vertices.push_back(addVertex(Vec3(-1, 0, -1), Vec3(0, 1, 0), 0, 0));
-		vertices.push_back(addVertex(Vec3(1, 0, -1), Vec3(0, 1, 0), 1, 0));
-		vertices.push_back(addVertex(Vec3(-1, 0, 1), Vec3(0, 1, 0), 0, 1));
-		vertices.push_back(addVertex(Vec3(1, 0, 1), Vec3(0, 1, 0), 1, 1));
-		std::vector<unsigned int> indices;
-		indices.push_back(0);
-		indices.push_back(1);
-		indices.push_back(2);
-		indices.push_back(1);
-		indices.push_back(3);
-		indices.push_back(2);
-		mesh.init(core, vertices, indices);
-		shaders->load(core, "StaticModelUntextured", "Shaders/VS.txt", "Shaders/PSUntextured.txt");
-		shaderName = "StaticModelUntextured";
-		psos->createPSO(core, "StaticModelUntexturedPSO", shaders->find("StaticModelUntextured")->vs, shaders->find("StaticModelUntextured")->ps, VertexLayoutCache::getStaticLayout());
-	}
-	void draw(Core* core, PSOManager* psos, Shaders* shaders, Matrix &vp)
-	{
-		Matrix planeWorld;
-		shaders->updateConstantVS("StaticModelUntextured", "staticMeshBuffer", "VP", &vp);
-		shaders->updateConstantVS("StaticModelUntextured", "staticMeshBuffer", "W", &planeWorld);
-		shaders->apply(core, shaderName);
-		psos->bind(core, "StaticModelUntexturedPSO");
-		mesh.draw(core);
-	}
-};
-
-class StaticModel
-{
-public:
-	std::vector<Mesh *> meshes;
-	std::vector<std::string> textureFilenames;
-	void load(Core* core, std::string filename, Shaders* shaders, PSOManager* psos)
-	{
-		GEMLoader::GEMModelLoader loader;
-		std::vector<GEMLoader::GEMMesh> gemmeshes;
-		loader.load(filename, gemmeshes);
-		for (int i = 0; i < gemmeshes.size(); i++)
-		{
-			Mesh* mesh = new Mesh();
-			std::vector<STATIC_VERTEX> vertices;
-			for (int j = 0; j < gemmeshes[i].verticesStatic.size(); j++)
-			{
-				STATIC_VERTEX v;
-				memcpy(&v, &gemmeshes[i].verticesStatic[j], sizeof(STATIC_VERTEX));
-				vertices.push_back(v);
-			}
-			mesh->init(core, vertices, gemmeshes[i].indices);
-			meshes.push_back(mesh);
-		}
-		shaders->load(core, "StaticModelUntextured", "Shaders/VS.txt", "Shaders/PSUntextured.txt");
-		psos->createPSO(core, "StaticModelPSO", shaders->find("StaticModelUntextured")->vs, shaders->find("StaticModelUntextured")->ps, VertexLayoutCache::getStaticLayout());
-	}
-	void updateWorld(Shaders* shaders, Matrix& w)
-	{
-		shaders->updateConstantVS("StaticModelUntextured", "staticMeshBuffer", "W", &w);
-	}
-	void draw(Core* core, PSOManager* psos, Shaders* shaders, Matrix &vp)
-	{
-		shaders->updateConstantVS("StaticModelUntextured", "staticMeshBuffer", "VP", &vp);
-		shaders->apply(core, "StaticModelUntextured");
-		psos->bind(core, "StaticModelPSO");
-		for (int i = 0; i < meshes.size(); i++)
-		{
-			meshes[i]->draw(core);
-		}
-	}
-};
-
-class AnimatedModel
-{
-public:
-	std::vector<Mesh *> meshes;
-	Animation animation;
-	std::vector<std::string> textureFilenames;
-	void load(Core* core, std::string filename, PSOManager* psos, Shaders* shaders)
-	{
-		GEMLoader::GEMModelLoader loader;
-		std::vector<GEMLoader::GEMMesh> gemmeshes;
-		GEMLoader::GEMAnimation gemanimation;
-		loader.load(filename, gemmeshes, gemanimation);
-		for (int i = 0; i < gemmeshes.size(); i++)
-		{
-			Mesh *mesh = new Mesh();
-			std::vector<ANIMATED_VERTEX> vertices;
-			for (int j = 0; j < gemmeshes[i].verticesAnimated.size(); j++)
-			{
-				ANIMATED_VERTEX v;
-				memcpy(&v, &gemmeshes[i].verticesAnimated[j], sizeof(ANIMATED_VERTEX));
-				vertices.push_back(v);
-			}
-			mesh->init(core, vertices, gemmeshes[i].indices);
-			meshes.push_back(mesh);
-		}
-		shaders->load(core, "AnimatedUntextured", "Shaders/VSAnim.txt", "Shaders/PSUntextured.txt");
-		psos->createPSO(core, "AnimatedModelPSO", shaders->find("AnimatedUntextured")->vs, shaders->find("AnimatedUntextured")->ps, VertexLayoutCache::getAnimatedLayout());
-		memcpy(&animation.skeleton.globalInverse, &gemanimation.globalInverse, 16 * sizeof(float));
-		for (int i = 0; i < gemanimation.bones.size(); i++)
-		{
-			Bone bone;
-			bone.name = gemanimation.bones[i].name;
-			memcpy(&bone.offset, &gemanimation.bones[i].offset, 16 * sizeof(float));
-			bone.parentIndex = gemanimation.bones[i].parentIndex;
-			animation.skeleton.bones.push_back(bone);
-		}
-		for (int i = 0; i < gemanimation.animations.size(); i++)
-		{
-			std::string name = gemanimation.animations[i].name;
-			AnimationSequence aseq;
-			aseq.ticksPerSecond = gemanimation.animations[i].ticksPerSecond;
-			for (int j = 0; j < gemanimation.animations[i].frames.size(); j++)
-			{
-				AnimationFrame frame;
-				for (int index = 0; index < gemanimation.animations[i].frames[j].positions.size(); index++)
-				{
-					Vec3 p;
-					Quaternion q;
-					Vec3 s;
-					memcpy(&p, &gemanimation.animations[i].frames[j].positions[index], sizeof(Vec3));
-					frame.positions.push_back(p);
-					memcpy(&q, &gemanimation.animations[i].frames[j].rotations[index], sizeof(Quaternion));
-					frame.rotations.push_back(q);
-					memcpy(&s, &gemanimation.animations[i].frames[j].scales[index], sizeof(Vec3));
-					frame.scales.push_back(s);
-				}
-				aseq.frames.push_back(frame);
-			}
-			animation.animations.insert({ name, aseq });
-		}
-	}
-	void updateWorld(Shaders* shaders, Matrix& w)
-	{
-		shaders->updateConstantVS("AnimatedUntextured", "staticMeshBuffer", "W", &w);
-	}
-	void draw(Core* core, PSOManager* psos, Shaders* shaders, AnimationInstance* instance, Matrix& vp, Matrix& w)
-	{
-		psos->bind(core, "AnimatedModelPSO");
-		shaders->updateConstantVS("AnimatedUntextured", "staticMeshBuffer", "W", &w);
-		shaders->updateConstantVS("AnimatedUntextured", "staticMeshBuffer", "VP", &vp);
-		shaders->updateConstantVS("AnimatedUntextured", "staticMeshBuffer", "bones", instance->matrices);
-		shaders->apply(core, "AnimatedUntextured");
-		for (int i = 0; i < meshes.size(); i++)
-		{
-			meshes[i]->draw(core);
-		}
-	}
-};
-
 
 #define WIDTH  1920
 #define HEIGHT 1080
 
 static float deg2rad(float d) { return d * 3.1415926535f / 180.0f; }
-
-
 static float clampf(float v, float a, float b) { return std::max(a, std::min(b, v)); }
 
+// ============================================================================
+// HELPER: Convert VegetationItems to GrassInstances
+// ============================================================================
+std::vector<GrassInstance> convertToGrassInstances(
+    const std::vector<VegetationItem>& items,
+    int numGroups,
+    int numTypesPerGroup)
+{
+    std::vector<GrassInstance> instances;
+    instances.reserve(items.size());
+
+    std::mt19937 rng(12345);
+    std::uniform_real_distribution<float> randPhase(0.0f, 6.28318f);
+
+    for (const auto& item : items)
+    {
+        GrassInstance inst;
+        inst.position = item.position;
+        inst.rotationY = item.rotationY;
+        inst.scale = item.scale;
+        inst.windPhase = randPhase(rng);  // Random wind phase
+
+        // Map typeIndex to group and type within group
+        // Simple mapping: distribute types across groups
+        if (numGroups > 0 && numTypesPerGroup > 0)
+        {
+            inst.groupIndex = item.typeIndex % numGroups;
+            inst.typeIndex = (item.typeIndex / numGroups) % numTypesPerGroup;
+        }
+        else
+        {
+            inst.groupIndex = 0;
+            inst.typeIndex = 0;
+        }
+
+        instances.push_back(inst);
+    }
+
+    return instances;
+}
+
+// ============================================================================
+// HELPER: Convert VegetationItems to RockInstances
+// ============================================================================
+std::vector<RockInstance> convertToRockInstances(const std::vector<VegetationItem>& items)
+{
+    std::vector<RockInstance> instances;
+    instances.reserve(items.size());
+
+    for (const auto& item : items)
+    {
+        RockInstance inst;
+        inst.position = item.position;
+        inst.rotationY = item.rotationY;
+        inst.scale = item.scale;
+        inst.typeIndex = item.typeIndex;
+        inst.distanceToCamera = 0.0f;
+        inst.lodLevel = 2;  // Start at lowest LOD
+        instances.push_back(inst);
+    }
+
+    return instances;
+}
+
+// ============================================================================
+// MAIN
+// ============================================================================
 int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nCmdShow)
 {
-	Window window;
-	window.create(1920, 1080, "the game");
+    Window window;
+    window.create(WIDTH, HEIGHT, "the game");
 
-	Core core;
-	core.init(window.hwnd, 1920, 1080);
+    Core core;
+    core.init(window.hwnd, WIDTH, HEIGHT);
 
-	Shaders shaders;
-	PSOManager psos;
+    Shaders shaders;
+    PSOManager psos;
 
-	// --------------------------
-	// 1) 初始化 SkyDome
-	// --------------------------
-	SkyDome sky;
-	sky.init(&core, &psos, &shaders, 5000.0f);
+    // ====================================================================
+    // LOAD GRASS & ROCK ASSETS FROM CONFIG FILE
+    // ====================================================================
+    AssetManager assets;
+    if (!assets.loadFromConfig(&core, "assets.cfg"))
+    {
+        std::string msg = "Failed to load assets.cfg";
+        OutputDebugStringA(msg.c_str());
+        MessageBoxA(nullptr, msg.c_str(), "Asset Load Error", MB_OK);
+    }
 
+    // ====================================================================
+    // INITIALIZE SKY
+    // ====================================================================
+    SkyDome sky;
+    sky.init(&core, &psos, &shaders, 5000.0f);
 
-	// --------------------------
-	// 2) 初始化 HeightmapTerrain
-	// --------------------------
-	HeightmapTerrain terrain;
-	
-	bool terrainOK = terrain.init(
-		&core, &psos, &shaders,
-		"Assets/Heightmap/map2.png",
-		512, 512,          // 高度图分辨率
-		300.0f, 300.0f,    // 地形在世界中覆盖的 X/Z 尺寸（米/单位）
-		40.0f,             // heightScale：最高高度（单位）
-		0.0f,              // heightOffset：整体抬高（可选）
-		HeightmapTerrain::Format::PNG16
-	);
-	if (!terrainOK)
-	{
-		std::string msg = "Map not open";
-		OutputDebugStringA(msg.c_str());
-		MessageBoxA(nullptr, msg.c_str(), "Shader File Error", MB_OK);
+    // ====================================================================
+    // INITIALIZE TERRAIN
+    // ====================================================================
+    HeightmapTerrain terrain;
 
-		return 0;
-	}
+    // Store terrain size for vegetation generator
+    float terrainSizeX = 300.0f;
+    float terrainSizeZ = 300.0f;
 
-	// --------------------------
-	// 3) 你的 FPS 枪模型（照旧）
-	// --------------------------
-	Gun gunModel;
-	gunModel.load(&core,
-		"Assets/Models/AutomaticCarbine.gem",
-		"Assets/Models/Textures/gun.png",  
-		&psos,
-		&shaders);
+    bool terrainOK = terrain.init(
+        &core, &psos, &shaders,
+        "Assets/Heightmap/map2.png",
+        512, 512,
+        terrainSizeX, terrainSizeZ,
+        40.0f, 0.0f,
+        HeightmapTerrain::Format::PNG16
+    );
 
-	AnimationInstance gunAnim;
-	gunAnim.init(&gunModel.animation, 0);
-	
+    if (!terrainOK)
+    {
+        std::string msg = "Map not open";
+        OutputDebugStringA(msg.c_str());
+        MessageBoxA(nullptr, msg.c_str(), "Terrain Load Error", MB_OK);
+        return 0;
+    }
 
+    // ====================================================================
+    // ====================================================================
+    //                 VEGETATION GENERATION SYSTEM
+    // ====================================================================
+    // ====================================================================
 
+    std::cout << "\n";
+    std::cout << "========================================\n";
+    std::cout << "   VEGETATION GENERATION SYSTEM\n";
+    std::cout << "========================================\n\n";
 
+    // ------------------------------------------------------------------------
+    // STEP 1: Create the vegetation generator
+    // ------------------------------------------------------------------------
+    VegetationGenerator vegGen;
 
-	// --------------------------
-	// 4) FPS camera state
-	// --------------------------
-	Vec3 camPos(0.0f, 1.7f, -3.0f);
-	const float eyeHeight = 1.7f;
-	float yaw = 0.0f;
-	float pitch = 0.0f;
-	const float moveSpeed = 4.0f;
-	const float mouseSens = 0.0025f;
-	const float pitchLimit = 1.45f;
+    // ------------------------------------------------------------------------
+    // STEP 2: Configure the generation
+    // ------------------------------------------------------------------------
+    // 
+    // OPTION A: Use a preset
+    // -----------------------
+    // VegetationConfig vegConfig = VegetationPresets::Meadow();  // Lush grass
+    // VegetationConfig vegConfig = VegetationPresets::Rocky();   // Many rocks
+    // VegetationConfig vegConfig = VegetationPresets::Forest();  // Mixed
+    // VegetationConfig vegConfig = VegetationPresets::Desert();  // Sparse
 
-	ShowCursor(FALSE);
-	window.useMouseClip = true;
+    // OPTION B: Custom configuration
+    // ------------------------------
+    VegetationConfig vegConfig;
 
-	modelState modelState;
-	modelState.idleClip = "04 idle";
-	modelState.walkClip = "07 walk";
-	modelState.fireClip = "08 fire";
-	modelState.reloadClip = "17 reload";
-	modelState.shotsPerSecond = 12.0f;
-	modelState.fireAnimRate = 3.0f;
+    // General distribution
+    vegConfig.density = 1.0f;              // Items per square meter
+   
+    vegConfig.minPointSpacing = 1.5f;       // Minimum meters between points
 
-	auto getCenterScreen = [&]() {
-		RECT rc{};
-		GetClientRect(window.hwnd, &rc);
-		POINT c{ (rc.right - rc.left) / 2, (rc.bottom - rc.top) / 2 };
-		ClientToScreen(window.hwnd, &c);
-		return c;
-		};
-	POINT center = getCenterScreen();
-	SetCursorPos(center.x, center.y);
+    // Rock vs Grass balance
+    vegConfig.rockProbability = 0.12f;      // 12% rocks, 88% grass
+    vegConfig.noiseInfluence = 0.5f;        // Strong biome effect
+    vegConfig.noiseScale = 0.018f;          // Medium-sized biomes
 
-	// --------------------------
-	// 5) Viewmodel placement
-	// --------------------------
-	float gunX = 0.08f;
-	float gunY = 0.0f;
-	float gunZ = 0.0f;
+    // Grass settings
+    vegConfig.grassMinScale = 0.7f;
+    vegConfig.grassMaxScale = 1.4f;
+    vegConfig.grassRadius = 0.2f;           // Small collision radius
 
-	Vec3 gunScale(0.01f, 0.01f, 0.01f);
+    vegConfig.grassCluster.probability = 0.7f;   // 70% spawn as clusters
+    vegConfig.grassCluster.minItems = 6;
+    vegConfig.grassCluster.maxItems = 18;
+    vegConfig.grassCluster.radius = 4.0f;
+    vegConfig.grassCluster.falloff = 1.2f;       // Gradual falloff
 
-	const float PI = 3.141592654f;
-	float modelRotX = 0.0f;
-	float modelRotY = +PI * 1.01f;
-	float modelRotZ = 0.0f;
+    // Rock settings
+    vegConfig.rockMinScale = 0.4f;
+    vegConfig.rockMaxScale = 2.8f;
+    vegConfig.rockRadius = 1.2f;            // Larger collision radius
 
-	Timer timer;
+    vegConfig.rockCluster.probability = 0.45f;   // 45% spawn as clusters
+    vegConfig.rockCluster.minItems = 2;
+    vegConfig.rockCluster.maxItems = 7;
+    vegConfig.rockCluster.radius = 6.0f;
+    vegConfig.rockCluster.falloff = 2.5f;        // Sharp falloff
 
-	while (1)
-	{
-		core.beginFrame();
+    // Terrain constraints
+    vegConfig.maxSlope = 40.0f;             // No vegetation on steep cliffs
 
-		float dt = timer.dt();
-		dt = std::min(dt, 0.05f);
+    // ------------------------------------------------------------------------
+    // STEP 3: Generate vegetation!
+    // ------------------------------------------------------------------------
+    // Use seed = 0 for random each time, or fixed seed for reproducible results
+    unsigned int seed = 42;  // Fixed seed for consistent results
 
-		window.checkInput();
-		if (window.keys[VK_ESCAPE]) break;
+    std::cout << "[VegetationGenerator] Configuration:\n";
+    std::cout << "  Total points: " << vegConfig.density << "\n";
+    std::cout << "  Rock probability: " << (vegConfig.rockProbability * 100) << "%\n";
+    std::cout << "  Grass cluster prob: " << (vegConfig.grassCluster.probability * 100) << "%\n";
+    std::cout << "  Rock cluster prob: " << (vegConfig.rockCluster.probability * 100) << "%\n";
+    std::cout << "  Seed: " << seed << "\n\n";
 
-		center = getCenterScreen();
+    vegGen.generate(&terrain, vegConfig, terrainSizeX, terrainSizeZ, seed);
 
-		// Mouse look
-		POINT cur{};
-		GetCursorPos(&cur);
+    // ------------------------------------------------------------------------
+    // STEP 4: Get the generated items
+    // ------------------------------------------------------------------------
+    const auto& generatedRocks = vegGen.getRockItems();
+    const auto& generatedGrass = vegGen.getGrassItems();
 
-		float dx = float(cur.x - center.x);
-		float dy = float(cur.y - center.y);
+    std::cout << "\n[Game] Vegetation generation complete!\n";
+    std::cout << "  Rocks generated: " << generatedRocks.size() << "\n";
+    std::cout << "  Grass generated: " << generatedGrass.size() << "\n\n";
 
-		SetCursorPos(center.x, center.y);
+    // ====================================================================
+    // INITIALIZE ROCKS (Using VegetationGenerator output)
+    // ====================================================================
+    Rocks rocks;
+    bool hasRocks = false;
 
-		yaw += dx * mouseSens;
-		pitch -= dy * mouseSens;
-		pitch = clampf(pitch, -pitchLimit, +pitchLimit);
+    auto& rockSets = assets.getRockSets();
+    if (!rockSets.empty() && !generatedRocks.empty())
+    {
+        auto& rockSet = rockSets[0];
 
-		// Forward (用于视角)
-		Vec3 forward(
-			sinf(yaw) * cosf(pitch),
-			sinf(pitch),
-			cosf(yaw) * cosf(pitch)
-		);
-		forward = forward.normalize();
+        // Convert VegetationItems to RockInstances
+        std::vector<RockInstance> rockInstances = convertToRockInstances(generatedRocks);
 
-		// Movement：忽略pitch，避免上下漂
-		Vec3 forwardFlat(forward.x, 0.0f, forward.z);
-		if (forwardFlat.length() > 0.0001f) forwardFlat = forwardFlat.normalize();
+        // Initialize with pre-generated instances
+        rocks.terrainSizeX = terrainSizeX;
+        rocks.terrainSizeZ = terrainSizeZ;
+        rocks.initWithInstances(&core, &psos, &shaders, &terrain,
+            rockSet.modelPaths,
+            rockSet.texturePaths,
+            rockInstances,
+            100.0f,     // View distance
+            32.0f       // Chunk size
+        );
 
-		Vec3 worldUp(0, 1, 0);
-		Vec3 rightFlat = Cross(worldUp, forwardFlat).normalize();
+        rocks.rockColor = Vec4(0.75f, 0.72f, 0.68f, 1.0f);  // Warm gray
+        rocks.lodDistanceHigh = 25.0f;
+        rocks.lodDistanceMedium = 60.0f;
 
-		float groundY = terrain.sampleHeightWorld(camPos.x, camPos.z);
+        hasRocks = true;
+        std::cout << "[Game] Rocks initialized: " << rockInstances.size() << " instances\n";
+    }
+    else
+    {
+        std::cout << "[Game] No rocks to initialize\n";
+    }
 
+    // ====================================================================
+    // INITIALIZE GRASS (Using VegetationGenerator output)
+    // ====================================================================
+    HybridGrassField grassField;
+    bool hasGrass = false;
 
-		if (window.keys['W']) camPos = camPos + forwardFlat * (moveSpeed * dt);
-		if (window.keys['S']) camPos = camPos - forwardFlat * (moveSpeed * dt);
-		if (window.keys['A']) camPos = camPos - rightFlat * (moveSpeed * dt);
-		if (window.keys['D']) camPos = camPos + rightFlat * (moveSpeed * dt);
+    auto grassConfigs = assets.getGrassGroupConfigs();
+    if (!grassConfigs.empty() && !generatedGrass.empty())
+    {
+        // Count groups and types for mapping
+        int numGroups = (int)grassConfigs.size();
+        int avgTypesPerGroup = 0;
+        for (const auto& group : grassConfigs)
+        {
+            avgTypesPerGroup += (int)group.types.size();
+        }
+        avgTypesPerGroup = numGroups > 0 ? avgTypesPerGroup / numGroups : 1;
 
+        // Convert VegetationItems to GrassInstances
+        std::vector<GrassInstance> grassInstances = convertToGrassInstances(
+            generatedGrass, numGroups, avgTypesPerGroup);
 
-		camPos.y = groundY + eyeHeight;
-		//camPos.y = eyeHeight;
-		// --------------------------
-		// World VP
-		// --------------------------
-		float aspect = 1920.0f / 1080.0f;
-		Matrix pWorld = Matrix::perspective(0.01f, 10000.0f, aspect, 60.0f);
-		Matrix vWorld = Matrix::lookAt(camPos, camPos + forward, worldUp);
-		Matrix vpWorld = vWorld * pWorld;
+        // Initialize with pre-generated instances
+        grassField.terrainSizeX = terrainSizeX;
+        grassField.terrainSizeZ = terrainSizeZ;
+        grassField.initWithInstances(&core, &psos, &shaders, &terrain,
+            grassConfigs,
+            grassInstances,
+            50.0f,      // View distance
+            16.0f       // Chunk size
+        );
 
-		core.beginRenderPass();
+        // Customize colors
+        grassField.colorTop = Vec4(0.55f, 0.95f, 0.45f, 1.0f);     // Bright green tips
+        grassField.colorBottom = Vec4(0.25f, 0.55f, 0.22f, 1.0f);  // Darker base
 
+        // Customize wind
+        grassField.windDirection = Vec2(1.0f, 0.3f);
+        grassField.windStrength = 1.3f;
 
-		// 先画天空（写入最远深度），再画地形和其它世界物体
-		sky.draw(&core, &psos, &shaders, vpWorld, camPos);
+        hasGrass = true;
+        std::cout << "[Game] Grass initialized: " << grassInstances.size() << " instances\n";
+    }
+    else
+    {
+        std::cout << "[Game] No grass to initialize\n";
+    }
 
+    std::cout << "\n========================================\n";
+    std::cout << "   VEGETATION SETUP COMPLETE\n";
+    std::cout << "========================================\n\n";
 
+    // ====================================================================
+    // INITIALIZE GUN
+    // ====================================================================
+    Gun gunModel;
+    gunModel.load(&core,
+        "Assets/Models/AutomaticCarbine.gem",
+        "Assets/Models/Textures/gun.png",
+        &psos, &shaders);
 
-		// 地形 world 矩阵：默认单位矩阵即可（Matrix默认是单位阵）
-		Matrix terrainW;
-		terrain.draw(&core, &psos, &shaders, vpWorld, terrainW);
+    AnimationInstance gunAnim;
+    gunAnim.init(&gunModel.animation, 0);
 
+    // ====================================================================
+    // FPS CAMERA STATE
+    // ====================================================================
+    Vec3 camPos(0.0f, 1.7f, -3.0f);
+    const float eyeHeight = 1.7f;
+    float yaw = 0.0f;
+    float pitch = 0.0f;
+    const float moveSpeed = 4.0f;
+    const float mouseSens = 0.0025f;
+    const float pitchLimit = 1.45f;
 
+    ShowCursor(FALSE);
+    window.useMouseClip = true;
 
-		// --------------------------
-		// Gun animation update
-		// --------------------------
-		modelState.update(window, gunAnim, dt);
-		modelState.getGunOffset(gunX, gunY, gunZ, modelRotY);
+    modelState modelState;
+    modelState.idleClip = "04 idle";
+    modelState.walkClip = "07 walk";
+    modelState.fireClip = "08 fire";
+    modelState.reloadClip = "17 reload";
+    modelState.shotsPerSecond = 12.0f;
+    modelState.fireAnimRate = 3.0f;
 
-		// --------------------------
-		// Draw gun as viewmodel (VP = P)
-		// --------------------------
-		Matrix pGun = Matrix::perspective(0.001f, 1000.0f, aspect, 60.0f);
-		Matrix vpGun = pGun;
+    auto getCenterScreen = [&]() {
+        RECT rc{};
+        GetClientRect(window.hwnd, &rc);
+        POINT c{ (rc.right - rc.left) / 2, (rc.bottom - rc.top) / 2 };
+        ClientToScreen(window.hwnd, &c);
+        return c;
+        };
 
-		Matrix S = Matrix::scaling(gunScale);
-		Matrix R = Matrix::rotateZ(modelRotZ) * Matrix::rotateY(modelRotY) * Matrix::rotateX(modelRotX);
-		Matrix T = Matrix::translation(Vec3(gunX, gunY, gunZ));
-		Matrix Wgun = S * R * T;
+    POINT center = getCenterScreen();
+    SetCursorPos(center.x, center.y);
 
-		gunModel.draw(&core, &psos, &shaders, &gunAnim, vpGun, Wgun);
+    // Viewmodel placement
+    float gunX = 0.08f;
+    float gunY = 0.0f;
+    float gunZ = 0.0f;
+    Vec3 gunScale(0.01f, 0.01f, 0.01f);
+    const float PI = 3.141592654f;
+    float modelRotX = 0.0f;
+    float modelRotY = +PI * 1.01f;
+    float modelRotZ = 0.0f;
 
-		core.finishFrame();
-	}
+    Timer timer;
 
-	core.flushGraphicsQueue();
-	return 0;
+    std::cout << "========================================\n";
+    std::cout << "   GAME RUNNING - Press ESC to exit\n";
+    std::cout << "========================================\n\n";
+
+    // ====================================================================
+    // MAIN GAME LOOP
+    // ====================================================================
+    while (1)
+    {
+        core.beginFrame();
+
+        float dt = timer.dt();
+        dt = std::min(dt, 0.05f);
+
+        window.checkInput();
+        if (window.keys[VK_ESCAPE]) break;
+
+        center = getCenterScreen();
+
+        // Mouse look
+        POINT cur{};
+        GetCursorPos(&cur);
+        float dx = float(cur.x - center.x);
+        float dy = float(cur.y - center.y);
+        SetCursorPos(center.x, center.y);
+
+        yaw += dx * mouseSens;
+        pitch -= dy * mouseSens;
+        pitch = clampf(pitch, -pitchLimit, +pitchLimit);
+
+        // Forward vector
+        Vec3 forward(
+            sinf(yaw) * cosf(pitch),
+            sinf(pitch),
+            cosf(yaw) * cosf(pitch)
+        );
+        forward = forward.normalize();
+
+        // Movement (flat, no vertical)
+        Vec3 forwardFlat(forward.x, 0.0f, forward.z);
+        if (forwardFlat.length() > 0.0001f)
+            forwardFlat = forwardFlat.normalize();
+
+        Vec3 worldUp(0, 1, 0);
+        Vec3 rightFlat = Cross(worldUp, forwardFlat).normalize();
+
+        // Sample terrain height
+        float groundY = terrain.sampleHeightWorld(camPos.x, camPos.z);
+
+        // Update systems
+        if (hasGrass)
+            grassField.update(dt);
+
+        if (hasRocks)
+            rocks.update(camPos);
+
+        // Camera movement
+        if (window.keys['W']) camPos = camPos + forwardFlat * (moveSpeed * dt);
+        if (window.keys['S']) camPos = camPos - forwardFlat * (moveSpeed * dt);
+        if (window.keys['A']) camPos = camPos - rightFlat * (moveSpeed * dt);
+        if (window.keys['D']) camPos = camPos + rightFlat * (moveSpeed * dt);
+
+        // Camera follows terrain height
+        camPos.y = groundY + eyeHeight + 5.0f;
+
+        // World matrices
+        float aspect = (float)WIDTH / (float)HEIGHT;
+        Matrix pWorld = Matrix::perspective(0.01f, 10000.0f, aspect, 60.0f);
+        Matrix vWorld = Matrix::lookAt(camPos, camPos + forward, worldUp);
+        Matrix vpWorld = vWorld * pWorld;
+
+        core.beginRenderPass();
+
+        // Draw sky
+        sky.draw(&core, &psos, &shaders, vpWorld, camPos);
+
+        // Draw terrain
+        Matrix terrainW;
+        terrain.draw(&core, &psos, &shaders, vpWorld, terrainW);
+
+        // Draw rocks
+        if (hasRocks)
+            rocks.draw(&core, &psos, &shaders, vpWorld, camPos);
+
+        // Draw grass
+        if (hasGrass)
+            grassField.draw(&core, &psos, &shaders, vpWorld, camPos);
+
+        // Gun animation update
+        modelState.update(window, gunAnim, dt);
+        modelState.getGunOffset(gunX, gunY, gunZ, modelRotY);
+
+        // Draw gun (viewmodel)
+        Matrix pGun = Matrix::perspective(0.001f, 1000.0f, aspect, 60.0f);
+        Matrix vpGun = pGun;
+        Matrix S = Matrix::scaling(gunScale);
+        Matrix R = Matrix::rotateZ(modelRotZ) * Matrix::rotateY(modelRotY) * Matrix::rotateX(modelRotX);
+        Matrix T = Matrix::translation(Vec3(gunX, gunY, gunZ));
+        Matrix Wgun = S * R * T;
+        gunModel.draw(&core, &psos, &shaders, &gunAnim, vpGun, Wgun);
+
+        core.finishFrame();
+    }
+
+    core.flushGraphicsQueue();
+    return 0;
 }

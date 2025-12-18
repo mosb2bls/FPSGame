@@ -1,0 +1,54 @@
+// ====================================================================
+// GAME ASSETS CONFIGURATION FILE
+// ====================================================================
+// Format Notes:
+// - Lines starting with // are comments
+// - Sections are marked with [SECTION_NAME]
+// - Use comma-separated values for multi-part entries
+// ====================================================================
+
+// ====================================================================
+// GRASS GROUPS (Weighted Multi-Type Grass)
+// ====================================================================
+[GRASS_GROUPS]
+// Format:
+// GroupName, GroupWeight
+// TypeName, ModelPath, TexturePath, TypeWeight
+// TypeName, ModelPath, TexturePath, TypeWeight
+// ...
+// END
+
+// Short Grass Group (60% of all grass)
+Short Grass, 0.6
+Common Short Grass, Assets/Grass/Grass_Sets_Full_01a.gem, Assets/Grass/Grass_Sets_Full_01a.jpg, 0.6
+Thin Short Grass, Assets/Grass/Grass_Sets_Full_01h.gem, Assets/Grass/Grass_Sets_Full_01h.jpg, 0.2
+Wide Short Grass, Assets/Grass/Grass_Sets_Full_01i.gem, Assets/Grass/Grass_Sets_Full_01i.jpg, 0.2
+END
+
+// Tall Grass Group (30% of all grass)
+Tall Grass, 0.3
+Swaying Tall Grass, Assets/Grass/Grass_Tall_Wild_01a.gem, Assets/Grass/Grass_Tall_Wild_01a.jpg, 0.6
+Wild Tall Grass, Assets/Grass/Grass_Dry_Tall_01a.gem, Assets/Grass/Grass_Dry_Tall_01a.jpg, 0.3
+Dense Tall Grass, Assets/Grass/Grass_Tall_Wild_01i.gem, Assets/Grass/Grass_Tall_Wild_01i.jpg, 0.1
+END
+
+// Flowers Group (10% of all grass)
+Flowers, 0.1
+Yellow Wildflower, Assets/Grass/Grass_Sets_Full_01f.gem, Assets/Grass/Grass_Sets_Full_01f.jpg, 0.5
+White Daisy, Assets/Grass/GrassMix_Full_01o.gem, Assets/Grass/GrassMix_Full_01o.jpg, 0.3
+Purple Flower, Assets/Grass/Grass_Beach_01h.gem, Assets/Grass/Grass_Beach_01h.jpg, 0.2
+END
+
+
+// ====================================================================
+// ROCKS (With LOD Levels)
+// ====================================================================
+[ROCKS]
+// Format: RockName, HighLOD, MediumLOD, LowLOD, Texture
+// Note: Add your rock models here when ready
+
+// Example (uncomment when you have rock models):
+Rock1, Assets/Models/Rocks/Rock1_High.gem, Assets/Models/Rocks/Rock1_Medium.gem, Assets/Models/Rocks/Rock1_Low.gem, Assets/Textures/Rocks/rock1.png
+Rock2, Assets/Models/Rocks/Rock2_High.gem, Assets/Models/Rocks/Rock2_Medium.gem, Assets/Models/Rocks/Rock2_Low.gem, Assets/Textures/Rocks/rock2.png
+Rock3, Assets/Models/Rocks/Rock3_High.gem, Assets/Models/Rocks/Rock3_Medium.gem, Assets/Models/Rocks/Rock3_Low.gem, Assets/Textures/Rocks/rock3.png
+END

@@ -65,6 +65,21 @@
     <ClInclude Include="Gun.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="GrassField.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="AssetManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Rocks.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="HybridGrassField.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="LOD.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Shaders\PSSky.txt">
@@ -91,5 +106,20 @@
     <Text Include="Shaders\PSAnim.txt">
       <Filter>Resource Files</Filter>
     </Text>
+    <Text Include="Shaders\PSGrass.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\VSGrass.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\VSRock.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\PSRock.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets.cfg" />
   </ItemGroup>
 </Project>

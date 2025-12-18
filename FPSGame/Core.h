@@ -10,6 +10,7 @@
 #include "stb_image.h"
 #pragma comment(lib, "d3d12")
 #pragma comment(lib, "dxgi")
+#pragma comment(lib, "d3dcompiler.lib")
 
 
 class GPUFence

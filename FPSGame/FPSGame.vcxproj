@@ -133,28 +133,44 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Animation.h" />
+    <ClInclude Include="AssetManager.h" />
     <ClInclude Include="Core.h" />
     <ClInclude Include="GEMLoader.h" />
+    <ClInclude Include="GrassField.h" />
     <ClInclude Include="Gun.h" />
     <ClInclude Include="HeightmapTerrain.h" />
+    <ClInclude Include="HybridGrassField.h" />
+    <ClInclude Include="LOD.h" />
     <ClInclude Include="Maths.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="modelState.h" />
     <ClInclude Include="PSO.h" />
+    <ClInclude Include="RandomGenerator.h" />
+    <ClInclude Include="Rocks.h" />
     <ClInclude Include="Shaders.h" />
     <ClInclude Include="SkyDome.h" />
     <ClInclude Include="Timer.h" />
     <ClInclude Include="Window.h" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="Shaders\PSGrass.txt" />
+    <Text Include="Shaders\PSRock.txt" />
     <Text Include="Shaders\PSSky.txt" />
     <Text Include="Shaders\PSTerrain.txt" />
     <Text Include="Shaders\PSAnim.txt" />
     <Text Include="Shaders\PSUntextured.txt" />
     <Text Include="Shaders\VS.txt" />
     <Text Include="Shaders\VSAnim.txt" />
+    <Text Include="Shaders\VSGrass.txt" />
+    <Text Include="Shaders\VSRock.txt" />
     <Text Include="Shaders\VSSky.txt" />
     <Text Include="Shaders\VSTerrain.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets.cfg">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

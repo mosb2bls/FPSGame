@@ -16,6 +16,54 @@ static T clamp(const T value, const T minValue, const T maxValue)
 	return std::max(std::min(value, maxValue), minValue);
 }
 
+
+class Vec2
+{
+public:
+	union {
+		struct {
+			float x;
+			float y;
+		};
+		float coords[2];
+	};
+
+	Vec2() { x = 0; y = 0; }
+	Vec2(float _x, float _y) { x = _x; y = _y; }
+
+	Vec2 operator+(const Vec2& v) const { return Vec2(x + v.x, y + v.y); }
+	Vec2 operator-(const Vec2& v) const { return Vec2(x - v.x, y - v.y); }
+	Vec2 operator*(const Vec2& v) const { return Vec2(x * v.x, y * v.y); }
+	Vec2 operator/(const Vec2& v) const { return Vec2(x / v.x, y / v.y); }
+
+	Vec2& operator+=(const Vec2& v) { x += v.x, y += v.y; return *this; }
+	Vec2& operator-=(const Vec2& v) { x -= v.x, y -= v.y; return *this; }
+	Vec2& operator*=(const Vec2& v) { x *= v.x, y *= v.y; return *this; }
+	Vec2& operator/=(const Vec2& v) { x /= v.x, y /= v.y; return *this; }
+
+	Vec2 operator*(const float v) const { return Vec2(x * v, y * v); }
+	Vec2 operator/(const float v) const { float iv = 1.0f / v; return Vec2(x * iv, y * iv); }
+	Vec2& operator*=(const float v) { x *= v, y *= v; return *this; }
+	Vec2& operator/=(const float v) { float iv = 1.0f / v; x *= iv, y *= iv; return *this; }
+
+	Vec2 operator-() const { return Vec2(-x, -y); }
+
+	float length() const { return sqrtf(SQ(x) + SQ(y)); }
+	float lengthSq() const { return (SQ(x) + SQ(y)); }
+	Vec2 normalize() const { float l = 1.0f / sqrtf(SQ(x) + SQ(y)); return Vec2(x * l, y * l); }
+	float normalize_getLength() { float l = sqrtf(SQ(x) + SQ(y)); float il = 1.0f / l; x *= il; y *= il; return l; }
+};
+
+static float Dot(const Vec2& v1, const Vec2& v2) { return ((v1.x * v2.x) + (v1.y * v2.y)); }
+static float Cross(const Vec2& v1, const Vec2& v2) { return (v1.x * v2.y) - (v1.y * v2.x); } // Returns scalar (2D cross product magnitude)
+static Vec2 Max(const Vec2& v1, const Vec2& v2) { return Vec2(std::max(v1.x, v2.x), std::max(v1.y, v2.y)); }
+static Vec2 Min(const Vec2& v1, const Vec2& v2) { return Vec2(std::min(v1.x, v2.x), std::min(v1.y, v2.y)); }
+static Vec2 Lerp(const Vec2& v1, const Vec2& v2, float t) { return Vec2(v1.x + (v2.x - v1.x) * t, v1.y + (v2.y - v1.y) * t); }
+static float Distance(const Vec2& v1, const Vec2& v2) { return (v2 - v1).length(); }
+static float DistanceSq(const Vec2& v1, const Vec2& v2) { return (v2 - v1).lengthSq(); }
+
+
+
 class Vec3
 {
 public:
