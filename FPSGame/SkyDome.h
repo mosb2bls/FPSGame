@@ -14,7 +14,7 @@ class SkyDome
 {
     Texture skyTexture;
 public:
-    // Shader / PSO 名字，和 VSSky.txt / PSSky.txt 一致
+   
     std::string shaderName = "Sky";
     std::string psoName = "SkyPSO";
 

@@ -72,6 +72,15 @@ public:
     {
         core->getCommandList()->SetPipelineState(psos[name]);
     }
+    void add(const std::string& name, ID3D12PipelineState* pso)
+    {
+        if (psos.find(name) != psos.end())
+        {
+            std::cout << "[PSO] Warning: PSO already exists: " << name << "\n";
+            return;
+        }
+        psos[name] = pso;
+    }
     ~PSOManager()
     {
         for (auto& pso : psos)

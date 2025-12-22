@@ -135,11 +135,15 @@
     <ClInclude Include="Animation.h" />
     <ClInclude Include="AssetManager.h" />
     <ClInclude Include="Core.h" />
+    <ClInclude Include="Fog.h" />
+    <ClInclude Include="Fullscreenquad.h" />
     <ClInclude Include="GEMLoader.h" />
     <ClInclude Include="GrassField.h" />
     <ClInclude Include="Gun.h" />
     <ClInclude Include="HeightmapTerrain.h" />
     <ClInclude Include="HybridGrassField.h" />
+    <ClInclude Include="Lake.h" />
+    <ClInclude Include="LakeBottom.h" />
     <ClInclude Include="LOD.h" />
     <ClInclude Include="Maths.h" />
     <ClInclude Include="Mesh.h" />
@@ -153,18 +157,27 @@
     <ClInclude Include="Window.h" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="Shaders\PSBlurHorizontal.txt" />
+    <Text Include="Shaders\PSBlurVertical.txt" />
+    <Text Include="Shaders\PSFogComposite.txt" />
+    <Text Include="Shaders\PSFogRaymarch.txt" />
     <Text Include="Shaders\PSGrass.txt" />
+    <Text Include="Shaders\PSLakeBottom.txt" />
     <Text Include="Shaders\PSRock.txt" />
     <Text Include="Shaders\PSSky.txt" />
     <Text Include="Shaders\PSTerrain.txt" />
     <Text Include="Shaders\PSAnim.txt" />
     <Text Include="Shaders\PSUntextured.txt" />
+    <Text Include="Shaders\PSWater.txt" />
     <Text Include="Shaders\VS.txt" />
     <Text Include="Shaders\VSAnim.txt" />
+    <Text Include="Shaders\VSFullscreen.txt" />
     <Text Include="Shaders\VSGrass.txt" />
+    <Text Include="Shaders\VSLakeBottom.txt" />
     <Text Include="Shaders\VSRock.txt" />
     <Text Include="Shaders\VSSky.txt" />
     <Text Include="Shaders\VSTerrain.txt" />
+    <Text Include="Shaders\VSWater.txt" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assets.cfg">

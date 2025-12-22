@@ -47,7 +47,7 @@ public:
 class Barrier
 {
 public:
-	static void add(ID3D12Resource *res, D3D12_RESOURCE_STATES first, D3D12_RESOURCE_STATES second, ID3D12GraphicsCommandList4* commandList)
+	static void add(ID3D12Resource* res, D3D12_RESOURCE_STATES first, D3D12_RESOURCE_STATES second, ID3D12GraphicsCommandList4* commandList)
 	{
 		D3D12_RESOURCE_BARRIER rb;
 		memset(&rb, 0, sizeof(D3D12_RESOURCE_BARRIER));
@@ -96,6 +96,8 @@ public:
 	int width;
 	int height;
 	HWND windowHandle;
+	ID3D12DescriptorHeap* rtvHeap;
+	int frameInd;
 	void init(HWND hwnd, int _width, int _height)
 	{
 		IDXGIFactory4* factory = nullptr;
@@ -172,7 +174,7 @@ public:
 		renderTargetViewHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 		device->CreateDescriptorHeap(&renderTargetViewHeapDesc, IID_PPV_ARGS(&backbufferHeap));
 		renderTargetViewHandle = backbufferHeap->GetCPUDescriptorHandleForHeapStart();
-		backbuffers = new ID3D12Resource *[scDesc.BufferCount];
+		backbuffers = new ID3D12Resource * [scDesc.BufferCount];
 		backbuffers[0] = NULL;
 		backbuffers[1] = NULL;
 
@@ -450,7 +452,7 @@ public:
 		ID3D12CommandList* lists[] = { getCommandList() };
 		graphicsQueue->ExecuteCommandLists(1, lists);
 	}
-	void uploadResource(ID3D12Resource* dstResource, const void* data, unsigned int size, D3D12_RESOURCE_STATES targetState, D3D12_PLACED_SUBRESOURCE_FOOTPRINT *texFootprint = NULL)
+	void uploadResource(ID3D12Resource* dstResource, const void* data, unsigned int size, D3D12_RESOURCE_STATES targetState, D3D12_PLACED_SUBRESOURCE_FOOTPRINT* texFootprint = NULL)
 	{
 		unsigned int frameIndex = swapchain->GetCurrentBackBufferIndex();
 		ID3D12Resource* uploadBuffer;
@@ -484,7 +486,8 @@ public:
 			dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
 			dst.SubresourceIndex = 0;
 			getCommandList()->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-		} else
+		}
+		else
 		{
 			getCommandList()->CopyBufferRegion(dstResource, 0, uploadBuffer, 0, size);
 		}
@@ -551,6 +554,48 @@ public:
 		graphicsQueueFence[0].signal(graphicsQueue);
 		graphicsQueueFence[0].wait();
 	}
+
+	//fog
+
+	D3D12_CPU_DESCRIPTOR_HANDLE getBackBufferRTVHandle()
+	{
+		UINT rtvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtvHeap->GetCPUDescriptorHandleForHeapStart();
+		rtvHandle.ptr += frameIndex() * rtvDescriptorSize;
+		return rtvHandle;
+	}
+
+	D3D12_CPU_DESCRIPTOR_HANDLE getDSVHandle()
+	{
+		return dsvHeap->GetCPUDescriptorHandleForHeapStart();
+	}
+
+	void setBackBufferRenderTarget()
+	{
+		UINT rtvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = backbufferHeap->GetCPUDescriptorHandleForHeapStart();
+		rtvHandle.ptr += frameIndex() * rtvDescriptorSize;
+		getCommandList()->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+	}
+	void setBackBufferRenderTargetNoDepth()
+	{
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = getBackBufferRTVHandle();
+		getCommandList()->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+	}
+
+	// Get screen width
+	int getWidth() const { return width; }
+
+	// Get screen height  
+	int getHeight() const { return height; }
+
+	void setDefaultDescriptorHeaps()
+	{
+		ID3D12DescriptorHeap* heaps[] = { srvHeap };
+		getCommandList()->SetDescriptorHeaps(1, heaps);
+	}
+
+
 	~Core()
 	{
 		for (int i = 0; i < 2; i++)

@@ -80,6 +80,21 @@
     <ClInclude Include="LOD.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="RandomGenerator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Fog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Fullscreenquad.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Lake.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="LakeBottom.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Shaders\PSSky.txt">
@@ -116,6 +131,33 @@
       <Filter>Resource Files</Filter>
     </Text>
     <Text Include="Shaders\PSRock.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\VSFullscreen.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\PSBlurHorizontal.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\PSBlurVertical.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\PSFogComposite.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\PSFogRaymarch.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\PSWater.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\VSWater.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\PSLakeBottom.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\VSLakeBottom.txt">
       <Filter>Resource Files</Filter>
     </Text>
   </ItemGroup>

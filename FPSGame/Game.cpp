@@ -13,9 +13,15 @@
 #include "AssetManager.h"
 #include "Animation.h"
 #include "modelState.h"
+#include "Fog.h"
+#include "LakeBottom.h"
+#include "Lake.h"
+
 #include "RandomGenerator.h"  // Include the vegetation generator
 #include <algorithm>
 #include <Windows.h>
+
+#define _CRT_SECURE_NO_WARNINGS
 
 #define WIDTH  1920
 #define HEIGHT 1080
@@ -24,7 +30,13 @@ static float deg2rad(float d) { return d * 3.1415926535f / 180.0f; }
 static float clampf(float v, float a, float b) { return std::max(a, std::min(b, v)); }
 
 // ============================================================================
+// === LAKE === Global lake pointer for collision and grass filtering
+// ============================================================================
+Lake* g_lake = nullptr;
+
+// ============================================================================
 // HELPER: Convert VegetationItems to GrassInstances
+// === MODIFIED === Now filters out grass inside the lake
 // ============================================================================
 std::vector<GrassInstance> convertToGrassInstances(
     const std::vector<VegetationItem>& items,
@@ -37,8 +49,27 @@ std::vector<GrassInstance> convertToGrassInstances(
     std::mt19937 rng(12345);
     std::uniform_real_distribution<float> randPhase(0.0f, 6.28318f);
 
+    int skippedCount = 0;
+
     for (const auto& item : items)
     {
+        // === LAKE === Skip grass that's inside the lake
+        if (g_lake != nullptr)
+        {
+            // Add a small margin around the lake (2 meters) to keep grass away from shore
+            float margin = 2.0f;
+            float dx = item.position.x - g_lake->config.center.x;
+            float dz = item.position.z - g_lake->config.center.z;
+            float distSq = dx * dx + dz * dz;
+            float radiusWithMargin = g_lake->config.radius + margin;
+
+            if (distSq < radiusWithMargin * radiusWithMargin)
+            {
+                skippedCount++;
+                continue;  // Skip this grass instance
+            }
+        }
+
         GrassInstance inst;
         inst.position = item.position;
         inst.rotationY = item.rotationY;
@@ -61,6 +92,11 @@ std::vector<GrassInstance> convertToGrassInstances(
         instances.push_back(inst);
     }
 
+    if (skippedCount > 0)
+    {
+        std::cout << "[Grass] Skipped " << skippedCount << " grass instances inside lake area\n";
+    }
+
     return instances;
 }
 
@@ -72,8 +108,19 @@ std::vector<RockInstance> convertToRockInstances(const std::vector<VegetationIte
     std::vector<RockInstance> instances;
     instances.reserve(items.size());
 
+    const float spawnExclusionRadius = 5.0f;  // No rocks within 5m of spawn
+    int skippedCount = 0;
+
     for (const auto& item : items)
     {
+        // Skip rocks near spawn point (0, 0)
+        float distSq = item.position.x * item.position.x + item.position.z * item.position.z;
+        if (distSq < spawnExclusionRadius * spawnExclusionRadius)
+        {
+            skippedCount++;
+            continue;
+        }
+
         RockInstance inst;
         inst.position = item.position;
         inst.rotationY = item.rotationY;
@@ -84,14 +131,112 @@ std::vector<RockInstance> convertToRockInstances(const std::vector<VegetationIte
         instances.push_back(inst);
     }
 
+    if (skippedCount > 0)
+    {
+        std::cout << "[Rocks] Skipped " << skippedCount << " rocks near spawn point\n";
+    }
+
     return instances;
 }
+
+// ============================================================================
+// === LAKE === Scene render callback for reflection pass
+// ============================================================================
+struct SceneRenderData
+{
+    Core* core;
+    PSOManager* psos;
+    Shaders* shaders;
+    SkyDome* sky;
+    HeightmapTerrain* terrain;
+    Rocks* rocks;
+    HybridGrassField* grass;
+    Vec3 cameraPos;
+    bool hasRocks;
+    bool hasGrass;
+};
+
+void RenderSceneForReflection(void* userData, const Matrix& view, const Matrix& proj)
+{
+    SceneRenderData* data = (SceneRenderData*)userData;
+
+    // Calculate VP matrix
+    Matrix viewCopy = view;
+    Matrix projCopy = proj;
+    Matrix vp = viewCopy * projCopy;
+    Matrix terrainW;  // Identity
+
+    // Restore Core's state for rendering
+    data->core->setDefaultDescriptorHeaps();
+    data->core->getCommandList()->SetGraphicsRootSignature(data->core->rootSignature);
+
+    // Render sky (reflected)
+    data->sky->draw(data->core, data->psos, data->shaders, vp, data->cameraPos);
+
+    // Render terrain (reflected)
+    data->terrain->draw(data->core, data->psos, data->shaders, vp, terrainW);
+
+    // Render rocks (reflected) - optional, can skip for performance
+    if (data->hasRocks)
+        data->rocks->draw(data->core, data->psos, data->shaders, vp, data->cameraPos);
+}
+
+// ============================================================================
+// === COLLISION === Check collision with rocks
+// ============================================================================
+bool checkRockCollision(const Vec3& position, const std::vector<RockInstance>& rockInstances, float playerRadius)
+{
+    for (const auto& rock : rockInstances)
+    {
+        // Calculate collision radius based on rock scale
+        float rockRadius = rock.scale * 1.5f;  // Adjust multiplier as needed
+
+        float dx = position.x - rock.position.x;
+        float dz = position.z - rock.position.z;
+        float distSq = dx * dx + dz * dz;
+
+        float minDist = playerRadius + rockRadius;
+
+        if (distSq < minDist * minDist)
+        {
+            return true;  // Collision detected
+        }
+    }
+    return false;
+}
+
+// ============================================================================
+// === COLLISION === Check collision with lake (water)
+// ============================================================================
+bool checkLakeCollision(const Vec3& position, const Lake& lake, float playerRadius)
+{
+    float dx = position.x - lake.config.center.x;
+    float dz = position.z - lake.config.center.z;
+    float distSq = dx * dx + dz * dz;
+
+    // Allow player to get close to edge but not into water
+    float waterEdge = lake.config.radius - playerRadius - 0.5f;  // 0.5m safety margin
+
+    if (distSq < waterEdge * waterEdge)
+    {
+        return true;  // Would be in water
+    }
+    return false;
+}
+
 
 // ============================================================================
 // MAIN
 // ============================================================================
 int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nCmdShow)
 {
+
+    AllocConsole();
+    FILE* fp;
+    freopen_s(&fp, "CONOUT$", "w", stdout);
+    freopen_s(&fp, "CONOUT$", "w", stderr);
+
+
     Window window;
     window.create(WIDTH, HEIGHT, "the game");
 
@@ -100,6 +245,46 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 
     Shaders shaders;
     PSOManager psos;
+
+    // Initialize Lake
+    Lake lake;
+    g_lake = &lake;  // Set global pointer for grass filtering
+
+    LakeBottom lakeBottom;
+
+    // ====================================================================
+    // === FOG === Initialize Volumetric Fog System
+    // ====================================================================
+    VolumetricFog fog;
+    fog.init(&core, WIDTH, HEIGHT);
+
+    // Configure fog appearance
+    fog.config.density = 0.02f;              // Fog density (0.01 - 0.05 typical)
+    fog.config.heightFalloff = 0.06f;        // How quickly fog thins with height
+    fog.config.groundLevel = 0.0f;           // Y level of thickest fog
+    fog.config.maxHeight = 60.0f;            // Fog disappears above this height
+
+    fog.config.fogColor = Vec3(0.65f, 0.75f, 0.88f);   // Bluish fog
+    fog.config.sunColor = Vec3(1.0f, 0.95f, 0.85f);   // Warm sunlight
+    fog.config.ambientColor = Vec3(0.4f, 0.5f, 0.6f); // Ambient fog tint
+
+    fog.config.sunDirection = Vec3(0.4f, 0.7f, -0.5f); // Direction TO sun
+    fog.config.scattering = 0.6f;            // Light scattering intensity
+    fog.config.mieG = 0.75f;                 // Forward scattering bias
+
+    fog.config.raymarchSteps = 24;           // Quality (16-48, higher = better but slower)
+    fog.config.maxDistance = 150.0f;         // Maximum fog distance
+
+    fog.config.windSpeed = 0.4f;             // Fog drift speed
+    fog.config.windDirection = Vec2(1.0f, 0.2f);  // Wind direction
+
+    fog.enabled = true;  // Set to false to disable fog
+
+    std::cout << "[Game] Fog system initialized\n";
+
+    fog.config.groundLevel = -5.0f;
+    // ====================================================================
+
 
     // ====================================================================
     // LOAD GRASS & ROCK ASSETS FROM CONFIG FILE
@@ -145,6 +330,64 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
     }
 
     // ====================================================================
+    // === LAKE === Initialize Lake System (after terrain, BEFORE vegetation)
+    // ====================================================================
+    // === FIX #2: Position lake inside the world ===
+    // Terrain is 300x300, so center is at (150, 150)
+    // Place lake somewhere interesting - adjust these values as needed
+    lake.config.center = Vec3(30.0f, 0.0f, 40.0f);    // Near spawn point (0,0)
+    lake.config.radius = 25.0f;
+
+    // Set water level ABOVE terrain so it covers the ground
+    float lakeCenterHeight = terrain.sampleHeightWorld(lake.config.center.x, lake.config.center.z);
+    lake.config.waterLevel = lakeCenterHeight + 0.1f;  // Above terrain to cover it
+
+    std::cout << "[Lake] Water level: " << lake.config.waterLevel << "\n";
+
+    // === FIX #1: Change water color to BLUE ===
+    lake.config.shallowColor = Vec3(0.0f, 0.2f, 0.5f);    // Deep blue shallow
+    lake.config.deepColor = Vec3(0.0f, 0.05f, 0.15f);     // Very dark blue deep
+    lake.config.transparency = 0.85f;                      // More opaque
+    lake.config.reflectionStrength = 0.6f;
+    lake.config.fresnelBias = 0.02f;
+
+    // Wave settings - calmer waves for a lake
+    lake.config.waveSpeed = 0.6f;
+    lake.config.waveScale = 0.3f;          // Smaller waves
+
+    // Reflection settings
+    lake.config.reflectionStrength = 0.8f;
+    lake.config.reflectionDistortion = 0.02f;
+
+    // Sun settings (match fog/scene lighting)
+    lake.config.sunDirection = Vec3(0.4f, 0.7f, -0.5f);
+    lake.config.sunColor = Vec3(1.0f, 0.95f, 0.8f);
+    lake.config.specularPower = 256.0f;
+    lake.config.specularIntensity = 1.5f;
+
+    // Mesh quality
+    lake.config.radialSegments = 64;
+    lake.config.ringSegments = 32;
+
+    // Initialize the lake
+    lake.init(&core, &shaders, &psos, WIDTH, HEIGHT);
+
+    std::cout << "[Game] Lake initialized at (" << lake.config.center.x << ", "
+        << lake.config.waterLevel << ", " << lake.config.center.z
+        << ") with radius " << lake.config.radius << "\n";
+    // ====================================================================
+
+
+	// lake bottom initialization
+    lakeBottom.init(&core, &shaders, &psos,
+        "Assets/Lake/ground.jpg",      // Your texture path
+        lake.config.center,               // Same center as lake
+        lake.config.radius,               // Same radius
+        lake.config.waterLevel,           // Water surface level
+        8.0f);
+    
+
+    // ====================================================================
     // ====================================================================
     //                 VEGETATION GENERATION SYSTEM
     // ====================================================================
@@ -163,21 +406,11 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
     // ------------------------------------------------------------------------
     // STEP 2: Configure the generation
     // ------------------------------------------------------------------------
-    // 
-    // OPTION A: Use a preset
-    // -----------------------
-    // VegetationConfig vegConfig = VegetationPresets::Meadow();  // Lush grass
-    // VegetationConfig vegConfig = VegetationPresets::Rocky();   // Many rocks
-    // VegetationConfig vegConfig = VegetationPresets::Forest();  // Mixed
-    // VegetationConfig vegConfig = VegetationPresets::Desert();  // Sparse
-
-    // OPTION B: Custom configuration
-    // ------------------------------
     VegetationConfig vegConfig;
 
     // General distribution
     vegConfig.density = 1.0f;              // Items per square meter
-   
+
     vegConfig.minPointSpacing = 1.5f;       // Minimum meters between points
 
     // Rock vs Grass balance
@@ -213,7 +446,6 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
     // ------------------------------------------------------------------------
     // STEP 3: Generate vegetation!
     // ------------------------------------------------------------------------
-    // Use seed = 0 for random each time, or fixed seed for reproducible results
     unsigned int seed = 42;  // Fixed seed for consistent results
 
     std::cout << "[VegetationGenerator] Configuration:\n";
@@ -240,6 +472,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
     // ====================================================================
     Rocks rocks;
     bool hasRocks = false;
+    std::vector<RockInstance> rockInstances;  // Keep for collision detection
 
     auto& rockSets = assets.getRockSets();
     if (!rockSets.empty() && !generatedRocks.empty())
@@ -247,7 +480,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
         auto& rockSet = rockSets[0];
 
         // Convert VegetationItems to RockInstances
-        std::vector<RockInstance> rockInstances = convertToRockInstances(generatedRocks);
+        rockInstances = convertToRockInstances(generatedRocks);
 
         // Initialize with pre-generated instances
         rocks.terrainSizeX = terrainSizeX;
@@ -274,6 +507,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 
     // ====================================================================
     // INITIALIZE GRASS (Using VegetationGenerator output)
+    // === FIX #4: Grass filtering happens in convertToGrassInstances ===
     // ====================================================================
     HybridGrassField grassField;
     bool hasGrass = false;
@@ -291,6 +525,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
         avgTypesPerGroup = numGroups > 0 ? avgTypesPerGroup / numGroups : 1;
 
         // Convert VegetationItems to GrassInstances
+        // === FIX #4: This now filters out grass inside the lake ===
         std::vector<GrassInstance> grassInstances = convertToGrassInstances(
             generatedGrass, numGroups, avgTypesPerGroup);
 
@@ -310,7 +545,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 
         // Customize wind
         grassField.windDirection = Vec2(1.0f, 0.3f);
-        grassField.windStrength = 1.3f;
+        grassField.windStrength = 0.0f;
 
         hasGrass = true;
         std::cout << "[Game] Grass initialized: " << grassInstances.size() << " instances\n";
@@ -339,13 +574,16 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
     // ====================================================================
     // FPS CAMERA STATE
     // ====================================================================
-    Vec3 camPos(0.0f, 1.7f, -3.0f);
+    Vec3 camPos(0.0f, 1.7f, 0.0f);
     const float eyeHeight = 1.7f;
     float yaw = 0.0f;
     float pitch = 0.0f;
     const float moveSpeed = 4.0f;
     const float mouseSens = 0.0025f;
     const float pitchLimit = 1.45f;
+
+    // === FIX #3: Player collision radius ===
+    const float playerRadius = 0.5f;  // Player collision radius in meters
 
     ShowCursor(FALSE);
     window.useMouseClip = true;
@@ -380,6 +618,22 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
     float modelRotZ = 0.0f;
 
     Timer timer;
+    float totalTime = 0.0f;
+
+    // ====================================================================
+    // === LAKE === Prepare scene render data for reflection callback
+    // ====================================================================
+    SceneRenderData sceneData;
+    sceneData.core = &core;
+    sceneData.psos = &psos;
+    sceneData.shaders = &shaders;
+    sceneData.sky = &sky;
+    sceneData.terrain = &terrain;
+    sceneData.rocks = &rocks;
+    sceneData.grass = &grassField;
+    sceneData.hasRocks = hasRocks;
+    sceneData.hasGrass = hasGrass;
+    // ====================================================================
 
     std::cout << "========================================\n";
     std::cout << "   GAME RUNNING - Press ESC to exit\n";
@@ -397,6 +651,24 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 
         window.checkInput();
         if (window.keys[VK_ESCAPE]) break;
+
+        //fog
+        // === FOG === Toggle and adjust fog with F-keys
+        static bool togglePressed = false;
+
+        if (window.keys['T'] && !togglePressed) {  // Use 'T' for Toggle
+            fog.enabled = !fog.enabled;
+        }
+        togglePressed = window.keys['T'];
+
+        if (window.keys['G'] && !togglePressed) {  // 'G' = more density
+            fog.config.density = std::min(fog.config.density + 0.005f, 0.1f);
+        }
+
+        if (window.keys['H'] && !togglePressed) {  // 'H' = less density
+            fog.config.density = std::max(fog.config.density - 0.005f, 0.001f);
+        }
+        // ====================================================================
 
         center = getCenterScreen();
 
@@ -437,11 +709,79 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
         if (hasRocks)
             rocks.update(camPos);
 
-        // Camera movement
-        if (window.keys['W']) camPos = camPos + forwardFlat * (moveSpeed * dt);
-        if (window.keys['S']) camPos = camPos - forwardFlat * (moveSpeed * dt);
-        if (window.keys['A']) camPos = camPos - rightFlat * (moveSpeed * dt);
-        if (window.keys['D']) camPos = camPos + rightFlat * (moveSpeed * dt);
+        // ====================================================================
+        // === FIX #3: Camera movement with collision detection ===
+        // ====================================================================
+        Vec3 newPos = camPos;
+
+        // Calculate desired movement
+        if (window.keys['W']) newPos = newPos + forwardFlat * (moveSpeed * dt);
+        if (window.keys['S']) newPos = newPos - forwardFlat * (moveSpeed * dt);
+        if (window.keys['A']) newPos = newPos - rightFlat * (moveSpeed * dt);
+        if (window.keys['D']) newPos = newPos + rightFlat * (moveSpeed * dt);
+
+        // Check collisions before applying movement
+        bool canMove = true;
+
+        // Check lake collision
+        if (checkLakeCollision(newPos, lake, playerRadius))
+        {
+            canMove = false;
+        }
+
+        // Check rock collision
+        if (canMove && hasRocks && checkRockCollision(newPos, rockInstances, playerRadius))
+        {
+            canMove = false;
+        }
+
+        float halfX = terrainSizeX * 0.5f;
+        float halfZ = terrainSizeZ * 0.5f;
+        if (newPos.x < -halfX + 1.0f) newPos.x = -halfX + 1.0f;
+        if (newPos.x > halfX - 1.0f) newPos.x = halfX - 1.0f;
+        if (newPos.z < -halfZ + 1.0f) newPos.z = -halfZ + 1.0f;
+        if (newPos.z > halfZ - 1.0f) newPos.z = halfZ - 1.0f;
+
+        // Apply movement only if no collision
+        if (canMove)
+        {
+            camPos = newPos;
+        }
+        else
+        {
+            // Try sliding along obstacles (separate X and Z movement)
+            Vec3 newPosX = camPos;
+            Vec3 newPosZ = camPos;
+
+            if (window.keys['W'] || window.keys['S'])
+            {
+                Vec3 moveDir = window.keys['W'] ? forwardFlat : (forwardFlat * -1.0f);
+                newPosX.x = camPos.x + moveDir.x * moveSpeed * dt;
+                newPosZ.z = camPos.z + moveDir.z * moveSpeed * dt;
+            }
+            if (window.keys['A'] || window.keys['D'])
+            {
+                Vec3 moveDir = window.keys['D'] ? rightFlat : (rightFlat * -1.0f);
+                newPosX.x = camPos.x + moveDir.x * moveSpeed * dt;
+                newPosZ.z = camPos.z + moveDir.z * moveSpeed * dt;
+            }
+
+            // Try X movement only
+            bool canMoveX = true;
+            if (checkLakeCollision(newPosX, lake, playerRadius)) canMoveX = false;
+            if (canMoveX && hasRocks && checkRockCollision(newPosX, rockInstances, playerRadius)) canMoveX = false;
+            if (newPosX.x < 1.0f || newPosX.x > terrainSizeX - 1.0f) canMoveX = false;
+
+            // Try Z movement only
+            bool canMoveZ = true;
+            if (checkLakeCollision(newPosZ, lake, playerRadius)) canMoveZ = false;
+            if (canMoveZ && hasRocks && checkRockCollision(newPosZ, rockInstances, playerRadius)) canMoveZ = false;
+            if (newPosZ.z < 1.0f || newPosZ.z > terrainSizeZ - 1.0f) canMoveZ = false;
+
+            if (canMoveX) camPos.x = newPosX.x;
+            if (canMoveZ) camPos.z = newPosZ.z;
+        }
+        // ====================================================================
 
         // Camera follows terrain height
         camPos.y = groundY + eyeHeight + 5.0f;
@@ -453,6 +793,37 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
         Matrix vpWorld = vWorld * pWorld;
 
         core.beginRenderPass();
+
+        // ====================================================================
+        // === LAKE === Update scene data with current camera position
+        // ====================================================================
+        sceneData.cameraPos = camPos;
+        sceneData.hasRocks = hasRocks;
+        sceneData.hasGrass = hasGrass;
+
+        // === LAKE === Render reflection pass FIRST (before fog capture)
+        lake.beginReflectionPass(vWorld, pWorld, camPos, RenderSceneForReflection, &sceneData);
+
+        // === LAKE === Restore back buffer after reflection
+        core.setBackBufferRenderTarget();
+        core.setDefaultDescriptorHeaps();
+        core.getCommandList()->SetGraphicsRootSignature(core.rootSignature);
+
+        // Reset viewport to full screen
+        D3D12_VIEWPORT vp = { 0, 0, (float)WIDTH, (float)HEIGHT, 0, 1 };
+        D3D12_RECT scissor = { 0, 0, (LONG)WIDTH, (LONG)HEIGHT };
+        core.getCommandList()->RSSetViewports(1, &vp);
+        core.getCommandList()->RSSetScissorRects(1, &scissor);
+        // ====================================================================
+
+        // ====================================================================
+        // === FOG === Begin scene capture (renders to fog's internal buffer)
+        // ====================================================================
+        if (fog.enabled)
+        {
+            fog.beginSceneCapture();
+        }
+        // ====================================================================
 
         // Draw sky
         sky.draw(&core, &psos, &shaders, vpWorld, camPos);
@@ -469,6 +840,29 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
         if (hasGrass)
             grassField.draw(&core, &psos, &shaders, vpWorld, camPos);
 
+
+        lakeBottom.draw(&core, &psos, &shaders, vpWorld);
+
+
+        // ====================================================================
+        // === LAKE === Render lake surface (AFTER terrain, BEFORE fog composite)
+        // ====================================================================
+        lake.render(&core, &psos, &shaders, vpWorld, camPos, totalTime);
+        // ====================================================================
+
+        // ====================================================================
+        // === FOG === End scene and apply fog (composites to back buffer)
+        // ====================================================================
+        totalTime += dt;
+        if (fog.enabled)
+        {
+            fog.endSceneAndApplyFog(vWorld, pWorld, camPos, totalTime);
+
+            // Restore state after fog
+            core.setBackBufferRenderTarget();
+            core.setDefaultDescriptorHeaps();
+            core.getCommandList()->SetGraphicsRootSignature(core.rootSignature);
+        }
         // Gun animation update
         modelState.update(window, gunAnim, dt);
         modelState.getGunOffset(gunX, gunY, gunZ, modelRotY);
@@ -485,6 +879,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
         core.finishFrame();
     }
 
+    g_lake = nullptr;  // Clear global pointer
     core.flushGraphicsQueue();
     return 0;
 }
