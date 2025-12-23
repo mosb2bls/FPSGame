@@ -95,6 +95,9 @@
     <ClInclude Include="LakeBottom.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Tree.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Shaders\PSSky.txt">
@@ -158,6 +161,18 @@
       <Filter>Resource Files</Filter>
     </Text>
     <Text Include="Shaders\VSLakeBottom.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\VSTree.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\VSTreeShadow.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\PSTree.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Shaders\PSTreeShadow.txt">
       <Filter>Resource Files</Filter>
     </Text>
   </ItemGroup>

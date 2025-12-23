@@ -35,7 +35,7 @@ PS_INPUT VS(VS_INPUT input)
     // 1. Apply instance scale
     float3 localPos = input.Pos * input.InstanceScale;
     
-    // 2. Rotation matrix around Y axis (rocks only rotate on Y)
+    // 2. Rotation matrix around Y axis
     float cosR = cos(input.InstanceRotY);
     float sinR = sin(input.InstanceRotY);
     float3x3 rotationMatrix = float3x3(
@@ -58,8 +58,9 @@ PS_INPUT VS(VS_INPUT input)
     // 5. Transform normal to world space
     output.Normal = normalize(mul(localNormal, (float3x3)W));
     
-    // 6. Pass through texture coordinates
-    output.TexCoords = input.TexCoords;
+    // 6. FIX: Scale texture coordinates to tile properly
+    // Option A: Scale existing UVs
+    output.TexCoords = input.TexCoords * 2.0;  // Try 2.0, 3.0, or 4.0
     
     return output;
 }

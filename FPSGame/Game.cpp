@@ -15,6 +15,7 @@
 #include "modelState.h"
 #include "Fog.h"
 #include "LakeBottom.h"
+#include "Tree.h"
 #include "Lake.h"
 
 #include "RandomGenerator.h"  // Include the vegetation generator
@@ -252,6 +253,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 
     LakeBottom lakeBottom;
 
+    Tree tree;
     // ====================================================================
     // === FOG === Initialize Volumetric Fog System
     // ====================================================================
@@ -386,6 +388,28 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
         lake.config.waterLevel,           // Water surface level
         8.0f);
     
+
+    // Tree
+    // Get ground height near lake for tree placement
+    float treeX = lake.config.center.x + lake.config.radius + 5.0f;  // 5m from lake edge
+    float treeZ = lake.config.center.z;
+    float treeY = terrain.sampleHeightWorld(treeX, treeZ);
+
+    tree.init(&core, &shaders, &psos,
+        "Assets/Tree/Ash_Tree_Full_01b.gem",
+        "Assets/Tree/Ash_Tree_Full_01b.jpg",
+        "Assets/Tree/Bark012_4K-JPG_Color.jpg",   // ADD YOUR TRUNK TEXTURE HERE
+        Vec3(treeX, treeY, treeZ),
+        2.0f,
+        0.0f);
+
+    // Adjust trunk size as needed
+    tree.trunkRadius = 0.3f;    // Thickness
+    tree.trunkHeight = 4.0f;    // Height
+    tree.trunkOffsetY = 0.0f;   // Start from ground                        // Rotation
+
+    tree.shadowRadius = 4.0f;   // Shadow size
+    tree.shadowOpacity = 0.4f;  // Shadow darkness (0-1)
 
     // ====================================================================
     // ====================================================================
@@ -843,7 +867,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nC
 
         lakeBottom.draw(&core, &psos, &shaders, vpWorld);
 
-
+        tree.draw(&core, &psos, &shaders, vpWorld);
         // ====================================================================
         // === LAKE === Render lake surface (AFTER terrain, BEFORE fog composite)
         // ====================================================================

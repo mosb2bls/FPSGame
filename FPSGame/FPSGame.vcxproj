@@ -154,6 +154,7 @@
     <ClInclude Include="Shaders.h" />
     <ClInclude Include="SkyDome.h" />
     <ClInclude Include="Timer.h" />
+    <ClInclude Include="Tree.h" />
     <ClInclude Include="Window.h" />
   </ItemGroup>
   <ItemGroup>
@@ -167,6 +168,8 @@
     <Text Include="Shaders\PSSky.txt" />
     <Text Include="Shaders\PSTerrain.txt" />
     <Text Include="Shaders\PSAnim.txt" />
+    <Text Include="Shaders\PSTree.txt" />
+    <Text Include="Shaders\PSTreeShadow.txt" />
     <Text Include="Shaders\PSUntextured.txt" />
     <Text Include="Shaders\PSWater.txt" />
     <Text Include="Shaders\VS.txt" />
@@ -177,6 +180,8 @@
     <Text Include="Shaders\VSRock.txt" />
     <Text Include="Shaders\VSSky.txt" />
     <Text Include="Shaders\VSTerrain.txt" />
+    <Text Include="Shaders\VSTree.txt" />
+    <Text Include="Shaders\VSTreeShadow.txt" />
     <Text Include="Shaders\VSWater.txt" />
   </ItemGroup>
   <ItemGroup>
